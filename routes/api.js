@@ -1,47 +1,64 @@
-/*
-*
-*
-*       Complete the API routing below
-*       
-*       
-*/
-
 'use strict';
+const databaseActions = require("../databaseActions");
 
 module.exports = function (app) {
 
   app.route('/api/books')
-    .get(function (req, res){
-      //response will be array of book objects
-      //json res format: [{"_id": bookid, "title": book_title, "commentcount": num_of_comments },...]
+    .get(function (req, res) {
+      return databaseActions.getBooks().then(books => res.send(books));
     })
-    
-    .post(function (req, res){
+
+    .post(function (req, res) {
       let title = req.body.title;
-      //response will contain new book object including atleast _id and title
+      if (!title) return res.send("missing required field title");
+      return databaseActions.addBook(title)
+        .then(feedback => {
+          return databaseActions.getBookById(feedback.insertedId)
+        })
+        .then(book => {
+          const { comments, commentcount, ...rest } = book;
+          res.send(rest);
+        });
     })
-    
-    .delete(function(req, res){
-      //if successful response will be 'complete delete successful'
+
+    .delete(function (req, res) {
+      return databaseActions.deleteAllBooks().then(feedback => {
+        if (feedback.acknowledged) res.send("complete delete successful")
+      });
     });
 
 
 
   app.route('/api/books/:id')
-    .get(function (req, res){
+    .get(function (req, res) {
       let bookid = req.params.id;
-      //json res format: {"_id": bookid, "title": book_title, "comments": [comment,comment,...]}
+      return databaseActions.getBookById(bookid).then(book => {
+        if (!book || book.error) return res.send("no book exists");
+        return res.send(book);
+      });
     })
-    
-    .post(function(req, res){
+
+    .post(function (req, res) {
       let bookid = req.params.id;
       let comment = req.body.comment;
-      //json res format same as .get
+      if (!comment) return res.send("missing required field comment");
+      return databaseActions.updateBookById(bookid, comment)
+        .then((feedback) => {
+          if (feedback.modifiedCount === 0) return { error: true };
+          return databaseActions.getBookById(bookid);
+        })
+        .then(book => {
+          if (book.error) return res.send("no book exists")
+          return res.send(book)
+        });
     })
-    
-    .delete(function(req, res){
+
+    .delete(function (req, res) {
       let bookid = req.params.id;
-      //if successful response will be 'delete successful'
+      return databaseActions.deleteBookId(bookid).then(feedback => {
+        if (feedback.deletedCount === 0) return res.send("no book exists")
+        return res.send("delete successful")
+      });
     });
-  
+
 };
